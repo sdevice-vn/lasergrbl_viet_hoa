@@ -38,6 +38,21 @@ jobs:
           if (-not (Test-Path "$out\LaserGRBL.exe")) { throw "THIEU LaserGRBL.exe" }
           if (-not (Test-Path "$out\vi\LaserGRBL.resources.dll")) { throw "THIEU vi\LaserGRBL.resources.dll (ban dich tieng Viet)" }
 
+      - name: Dong goi bo cai (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          if (-not (Test-Path $iscc)) { throw "Khong tim thay ISCC.exe (Inno Setup)" }
+          & $iscc setup_vi.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path "output\LaserGRBL_TiengViet_Setup.exe")) { throw "THIEU bo cai output\\LaserGRBL_TiengViet_Setup.exe" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LaserGRBL_TiengViet_Setup
+          path: output/LaserGRBL_TiengViet_Setup.exe
+
       - uses: actions/upload-artifact@v4
         with:
           name: LaserGRBL_Windows_TiengViet
