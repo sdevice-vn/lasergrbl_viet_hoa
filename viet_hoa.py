@@ -12,7 +12,8 @@ Viec script lam:
   3. Dat tieng Viet lam ngon ngu mac dinh (khi nguoi dung chua chon ngon ngu nao).
   4. Them muc "Tieng Viet" vao menu Language.
   5. Doi TargetFrameworkVersion v4.0 -> v4.8 (may build GitHub khong con goi .NET 4.0).
-  6. Va CSDL vat lieu: tu chep StandardMaterials.psh sang %APPDATA%\\LaserGRBL (ban goc do trinh cai dat lam).
+  6. Dich CSDL vat lieu (StandardMaterials.psh) bang vi_materials.json.
+  7. Va CSDL vat lieu: tu chep StandardMaterials.psh sang %APPDATA%\\LaserGRBL (ban goc do trinh cai dat lam).
 Moi buoc deu bao loi ro rang (va dung build) neu ma nguon goc da thay doi qua nhieu.
 """
 import glob
@@ -21,7 +22,7 @@ import os
 import re
 import sys
 import xml.etree.ElementTree as ET
-from xml.sax.saxutils import escape
+from xml.sax.saxutils import escape, unescape
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CULTURE = "vi"
@@ -123,6 +124,39 @@ def register_in_csproj(csproj_text, new_files):
         csproj_text = csproj_text[: m.end()] + eol + block + csproj_text[m.end():]
         added += 1
     return csproj_text, added
+
+
+# ---------------------------------------------------------------- 2b. CSDL vat lieu
+def translate_materials(proj):
+    """Dich du lieu trong StandardMaterials.psh (Material, Action, Remarks, Thickness) bang vi_materials.json."""
+    src = os.path.join(proj, "StandardMaterials.psh")
+    table = os.path.join(HERE, "vi_materials.json")
+    if not (os.path.isfile(src) and os.path.isfile(table)):
+        print("CANH BAO: khong co StandardMaterials.psh hoac vi_materials.json - bo qua dich CSDL vat lieu")
+        return
+    with open(table, encoding="utf-8") as f:
+        tr = json.load(f)
+    text, bom = read(src)
+    stat = {"dich": 0, "thieu": 0}
+    missing = set()
+
+    def sub(m):
+        tag, raw = m.group(2), m.group(3)
+        val = unescape(raw, {"&apos;": "'", "&quot;": '"'})
+        vi = tr.get(tag, {}).get(val)
+        if vi is None:
+            if re.search(r"[A-Za-z]{2}", val) and tag in ("Material", "Remarks"):
+                stat["thieu"] += 1
+                missing.add((tag, val))
+            return m.group(0)
+        stat["dich"] += 1
+        return m.group(1) + escape(vi) + m.group(4)
+
+    text = re.sub(r"(<(Material|Remarks|Action|Thickness)>)(.*?)(</\2>)", sub, text, flags=re.S)
+    write(src, text, bom)
+    print("CSDL vat lieu: da dich %d o, %d o chua co ban dich" % (stat["dich"], stat["thieu"]))
+    for tag, val in sorted(missing)[:20]:
+        print("  chua dich [%s] %r" % (tag, val[:60]))
 
 
 # ---------------------------------------------------------------- 3,4. code
@@ -245,6 +279,7 @@ if __name__ == "__main__":
                       "<TargetFrameworkVersion>v4.8</TargetFrameworkVersion>", text)
     write(csproj, text, bom)
 
+    translate_materials(PROJ)
     patch_code(PROJ)
     print("Da dat tieng Viet mac dinh + them menu ngon ngu")
 
