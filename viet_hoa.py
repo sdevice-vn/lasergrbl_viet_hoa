@@ -153,6 +153,34 @@ def translate_materials(proj):
         return m.group(1) + escape(vi) + m.group(4)
 
     text = re.sub(r"(<(Material|Remarks|Action|Thickness)>)(.*?)(</\2>)", sub, text, flags=re.S)
+    # Luoc do MaterialDB.xsd co rang buoc duy nhat (Model, Material, Thickness, Action).
+    # Nhieu ten tieng Anh khac nhau (vd "Kraft Paper"/"KraftPaper") co the cung ra 1 ban dich
+    # -> trung khoa -> app bao loi va bo qua TOAN BO file. Them hau to (2), (3)... cho dong trung.
+    seen = set()
+    dup = {"n": 0}
+
+    def val(blk, tag):
+        mm = re.search(r"<%s>(.*?)</%s>" % (tag, tag), blk, re.S)
+        return mm.group(1) if mm else ""
+
+    def dedupe(m):
+        blk = m.group(0)
+        model, mat, th, act = (val(blk, t) for t in ("Model", "Material", "Thickness", "Action"))
+        n = 1
+        key = (model, mat, th, act)
+        while key in seen:
+            n += 1
+            key = (model, "%s (%d)" % (mat, n), th, act)
+        seen.add(key)
+        if n > 1:
+            dup["n"] += 1
+            blk = re.sub(r"(<Material>)(.*?)(</Material>)",
+                         lambda mm: "%s%s (%d)%s" % (mm.group(1), mm.group(2), n, mm.group(3)),
+                         blk, count=1, flags=re.S)
+        return blk
+
+    text = re.sub(r"<Materials>.*?</Materials>", dedupe, text, flags=re.S)
+    print("CSDL vat lieu: da danh so lai %d dong trung khoa sau khi dich" % dup["n"])
     write(src, text, bom)
     print("CSDL vat lieu: da dich %d o, %d o chua co ban dich" % (stat["dich"], stat["thieu"]))
     for tag, val in sorted(missing)[:20]:
