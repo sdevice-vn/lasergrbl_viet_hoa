@@ -1,0 +1,46 @@
+name: Build LaserGRBL Tieng Viet (Windows)
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lay ma nguon LaserGRBL moi nhat
+        shell: bash
+        run: git clone --depth 1 https://github.com/arkypita/LaserGRBL.git lasergrbl
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Ap dung ban dich tieng Viet
+        shell: bash
+        run: python viet_hoa.py lasergrbl
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build
+        shell: pwsh
+        run: |
+          msbuild lasergrbl\LaserGRBL\LaserGRBL.csproj /p:Configuration=Release /p:Platform=AnyCPU /m /v:minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Kiem tra goi tieng Viet
+        shell: pwsh
+        run: |
+          $out = "lasergrbl\LaserGRBL\bin\Release"
+          Get-ChildItem $out | Select-Object -First 40 | ForEach-Object { $_.Name }
+          if (-not (Test-Path "$out\LaserGRBL.exe")) { throw "THIEU LaserGRBL.exe" }
+          if (-not (Test-Path "$out\vi\LaserGRBL.resources.dll")) { throw "THIEU vi\LaserGRBL.resources.dll (ban dich tieng Viet)" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LaserGRBL_Windows_TiengViet
+          path: |
+            lasergrbl/LaserGRBL/bin/Release
+            !lasergrbl/LaserGRBL/bin/Release/**/*.pdb
