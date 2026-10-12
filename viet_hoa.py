@@ -12,6 +12,7 @@ Viec script lam:
   3. Dat tieng Viet lam ngon ngu mac dinh (khi nguoi dung chua chon ngon ngu nao).
   4. Them muc "Tieng Viet" vao menu Language.
   5. Doi TargetFrameworkVersion v4.0 -> v4.8 (may build GitHub khong con goi .NET 4.0).
+  6. Va CSDL vat lieu: tu chep StandardMaterials.psh sang %APPDATA%\\LaserGRBL (ban goc do trinh cai dat lam).
 Moi buoc deu bao loi ro rang (va dung build) neu ma nguon goc da thay doi qua nhieu.
 """
 import glob
@@ -178,6 +179,34 @@ def patch_code(proj):
 
     field = "private System.Windows.Forms.ToolStripMenuItem japaneseToolStripMenuItem;"
     t = replace_once(t, field, field + eol + "\t\tprivate System.Windows.Forms.ToolStripMenuItem MNVietnamese;", "Designer: khai bao field")
+    write(p, t, bom)
+
+    # --- PSHelper/MaterialDB.cs : CSDL vat lieu. Ban goc dung trinh cai dat (Inno Setup) chep
+    # StandardMaterials.psh vao %APPDATA%\\LaserGRBL; ban zip khong co buoc nay nen CSDL rong.
+    # Vá: tu chep file tu thu muc chay chuong trinh sang %APPDATA%\\LaserGRBL neu thieu/cu hon.
+    p = os.path.join(proj, "PSHelper", "MaterialDB.cs")
+    t, bom = read(p)
+    eol = eol_of(t)
+    old = 'public static string ServerFile { get => System.IO.Path.Combine(LaserGRBL.GrblCore.DataPath, "StandardMaterials.psh"); }'
+    new = eol.join([
+        "public static string ServerFile",
+        "\t\t{",
+        "\t\t\tget",
+        "\t\t\t{",
+        '\t\t\t\tstring dst = System.IO.Path.Combine(LaserGRBL.GrblCore.DataPath, "StandardMaterials.psh");',
+        "\t\t\t\ttry",
+        "\t\t\t\t{",
+        '\t\t\t\t\tstring src = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "StandardMaterials.psh");',
+        "\t\t\t\t\tif (System.IO.File.Exists(src) && (!System.IO.File.Exists(dst) || System.IO.File.GetLastWriteTimeUtc(src) > System.IO.File.GetLastWriteTimeUtc(dst)))",
+        "\t\t\t\t\t\tSystem.IO.File.Copy(src, dst, true);",
+        "\t\t\t\t}",
+        "\t\t\t\tcatch { }",
+        "\t\t\t\treturn dst;",
+        "\t\t\t}",
+        "\t\t}"])
+    t = replace_once(t, old, new, "MaterialDB.cs: ServerFile")
+    if "using System;" not in t:
+        t = replace_once(t, "namespace ", "using System;" + eol + "namespace ", "MaterialDB.cs: namespace") if t.count("namespace ") == 1 else t
     write(p, t, bom)
 
 
